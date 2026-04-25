@@ -75,7 +75,7 @@ If needed, update these constants in app.js:
 - HF_API
 - HF_MODEL
 
-## Hackathon Value
+## Usecase
 
 - Solves a real daily pain point in health tracking
 - Fast to use, low learning curve, mobile-first
@@ -89,10 +89,5 @@ If needed, update these constants in app.js:
 - Weekly insights and trends
 - Meal suggestions based on macro targets
 
-## Team
 
-Built for hackathon submission by the SnapCal team.
 
-## License
-
-MIT
