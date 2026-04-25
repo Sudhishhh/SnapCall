@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+	<meta charset="UTF-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+	<meta name="description" content="SnapCal: The most elegant AI calorie tracker. Log meals instantly using advanced food recognition." />
+	<meta name="theme-color" content="#000000" />
+	<meta name="apple-mobile-web-app-capable" content="yes" />
+	<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+	<title>SnapCal – AI Calorie Tracker</title>
+	<link rel="stylesheet" href="style.css" />
+	<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
+		rel="stylesheet" />
+</head>
+
+<body>
+
+	<div class="app-container">
+		<header>
+			<div class="logo">
+				<span class="logo-icon">📸</span> SnapCal
+			</div>
+			<button class="reset-btn" id="resetBtn" title="Reset Log">↺</button>
+
+		</header>
+
+		<!-- Date Strip -->
+		<section class="date-strip" id="dateStrip"></section>
+
+		<main id="mainScroll">
+			<!-- Dashboard View -->
+			<section class="dashboard">
+				<div class="main-ring-container">
+					<svg class="ring-svg" width="180" height="180">
+						<circle class="ring-bg" cx="90" cy="90" r="80"></circle>
+						<circle class="ring-progress" id="mainProgress" cx="90" cy="90" r="80" stroke-dasharray="502.65"
+							stroke-dashoffset="502.65"></circle>
+					</svg>
+					<div class="main-ring-content">
+						<div class="calories-left-val" id="caloriesLeft">0</div>
+						<div class="calories-left-label">kcal consumed</div>
+					</div>
+				</div>
+
+				<div class="macro-grid" style="margin-top: 30px;">
+					<div class="macro-card">
+						<div class="macro-val" id="valProtein">0g</div>
+						<div class="macro-label">Protein</div>
+						<div class="macro-ring-mini">
+							<svg viewBox="0 0 36 36" style="width: 100%;">
+								<path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+									fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="3" />
+								<path id="ringProtein"
+									d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+									fill="none" stroke="var(--protein)" stroke-width="3" stroke-dasharray="0, 100" />
+							</svg>
+						</div>
+					</div>
+					<div class="macro-card">
+						<div class="macro-val" id="valCarbs">0g</div>
+						<div class="macro-label">Carbs</div>
+						<div class="macro-ring-mini">
+							<svg viewBox="0 0 36 36" style="width: 100%;">
+								<path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+									fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="3" />
+								<path id="ringCarbs"
+									d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+									fill="none" stroke="var(--carbs)" stroke-width="3" stroke-dasharray="0, 100" />
+							</svg>
+						</div>
+					</div>
+					<div class="macro-card">
+						<div class="macro-val" id="valFats">0g</div>
+						<div class="macro-label">Fats</div>
+						<div class="macro-ring-mini">
+							<svg viewBox="0 0 36 36" style="width: 100%;">
+								<path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+									fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="3" />
+								<path id="ringFats"
+									d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+									fill="none" stroke="var(--fats)" stroke-width="3" stroke-dasharray="0, 100" />
+							</svg>
+						</div>
+					</div>
+				</div>
+			</section>
+
+			<!-- Action Area -->
+			<section id="actionArea">
+				<div class="upload-card" id="uploadTrigger">
+					<div class="upload-icon-circle">📸</div>
+					<div class="upload-label">Scan your meal</div>
+					<div class="upload-sub">Identifies food & logs calories instantly</div>
+					<input type="file" id="fileInput" accept="image/*" capture="environment" />
+				</div>
+				<img id="previewImg" alt="Preview" />
+			</section>
+
+			<!-- Loading -->
+			<div class="loader" id="aiLoader">
+				<div class="loader-spinner"></div>
+				<div style="font-size: 14px; color: var(--text-secondary);">Gemini is analyzing...</div>
+			</div>
+
+			<!-- Result Card -->
+			<section class="result-container" id="aiResult">
+				<div class="result-header">
+					<div class="result-food-name" id="resFoodName">Food Name</div>
+					<div class="result-kcal" id="resKcal">450 kcal</div>
+				</div>
+				<div class="macro-grid">
+					<div class="macro-label pill-protein" id="resProtein">12g Protein</div>
+					<div class="macro-label pill-carbs" id="resCarbs">45g Carbs</div>
+					<div class="macro-label pill-fat" id="resFats">0g Fats</div>
+				</div>
+				<button class="add-btn" id="logNowBtn">Add to Daily Log</button>
+			</section>
+
+		</main>
+
+		<!-- Tab Bar -->
+		<nav class="tab-bar">
+			<div class="tab-item active"></div>
+			<div class="fab-upload" id="fabUpload">＋</div>
+			<div class="tab-item"></div>
+		</nav>
+	</div>
+
+	<script src="app.js"></script>
+</body>
+
+</html>
