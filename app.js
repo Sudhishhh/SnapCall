@@ -1,8 +1,6 @@
 /* ===== CONFIG ===== */
-const HF_TOKEN        = '';
-const HF_API          = 'https://router.huggingface.co/v1/chat/completions';
-const HF_MODEL        = 'google/gemma-3-12b-it:featherless-ai';
-const DAILY_GOAL      = 2000;
+const GEMINI_MODEL = 'gemini-2.5-flash';
+const DAILY_GOAL = 2000;
 
 /* ===== STATE ===== */
 let imageB64   = null;
@@ -92,7 +90,7 @@ Respond ONLY in JSON:
 }`;
 
   try {
-    const response = await callHFVision(prompt, imageB64);
+    const response = await callGeminiVision(prompt, imageB64);
     let data;
     try {
       const jsonMatch = response.match(/\{[\s\S]*\}/);
@@ -214,34 +212,44 @@ function updateMiniRing(el, percent) {
 }
 
 
-/* ===== VISION API (HF) ===== */
-async function callHFVision(prompt, b64DataUrl) {
+/* ===== VISION API (Gemini) ===== */
+function getGeminiKey() {
+  return (window.__ENV__?.GEMINI_API_KEY || '').trim();
+}
+
+async function callGeminiVision(prompt, b64DataUrl) {
+  const apiKey = getGeminiKey();
+  if (!apiKey) throw new Error('Missing GEMINI_API_KEY');
+
+  const base64Data = b64DataUrl.split(',')[1];
+  const mimeType = b64DataUrl.split(';')[0].split(':')[1];
+  const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
+
   const payload = {
-    model: HF_MODEL,
-    messages: [
+    contents: [
       {
-        role: 'user',
-        content: [
-          { type: 'text', text: prompt },
-          { type: 'image_url', image_url: { url: b64DataUrl } }
+        parts: [
+          { text: prompt },
+          {
+            inline_data: {
+              mime_type: mimeType,
+              data: base64Data
+            }
+          }
         ]
       }
-    ],
-    max_tokens: 500
+    ]
   };
 
-  const res = await fetch(HF_API, {
+  const res = await fetch(apiUrl, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${HF_TOKEN}`
-    },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload)
   });
 
   if (!res.ok) throw new Error(`API Error: ${res.status}`);
   const json = await res.json();
-  return json.choices[0].message.content;
+  return json.candidates?.[0]?.content?.parts?.[0]?.text || '';
 }
 
 /* ===== UTILS ===== */
