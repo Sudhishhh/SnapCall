@@ -216,39 +216,16 @@ function updateMiniRing(el, percent) {
 
 /* ===== VISION API (Gemini) ===== */
 function getGeminiKey() {
-  // Require the key to be injected into the page (e.g. via config.js at build/deploy time).
-  // For production deployments (Vercel), generate a `config.js` that sets `window.__ENV__`.
-  return (window.__ENV__?.GEMINI_API_KEY || '').trim();
+  // Deprecated: key is now handled by /api/gemini serverless proxy.
+  return '';
 }
 
 async function callGeminiVision(prompt, b64DataUrl) {
-  const apiKey = getGeminiKey();
-  if (!apiKey) throw new Error('Missing GEMINI_API_KEY — set window.__ENV__.GEMINI_API_KEY or run `localStorage.setItem("GEMINI_API_KEY","YOUR_KEY")` in the console');
-
-  const base64Data = b64DataUrl.split(',')[1];
-  const mimeType = b64DataUrl.split(';')[0].split(':')[1];
-  const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
-
-  const payload = {
-    contents: [
-      {
-        parts: [
-          { text: prompt },
-          {
-            inline_data: {
-              mime_type: mimeType,
-              data: base64Data
-            }
-          }
-        ]
-      }
-    ]
-  };
-
-  const res = await fetch(apiUrl, {
+  // Call the serverless proxy which uses process.env.GEMINI_API_KEY on the server.
+  const res = await fetch('/api/gemini', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload)
+    body: JSON.stringify({ prompt, b64: b64DataUrl })
   });
 
   if (!res.ok) {
