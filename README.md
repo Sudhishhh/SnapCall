@@ -33,10 +33,11 @@ Logging food manually is slow and frustrating. SnapCal reduces friction by letti
 
 ```text
 snapcal/
-├─ index.html      # App UI layout
-├─ style.css       # Styling and responsive design
-├─ app.js          # App logic, state, Gemini API call
-└─ huggingface.py  # Quick API test script (now points to Gemini)
+├─ index.html      # App UI (Dashboard & Scanning)
+├─ style.css       # Premium iOS-inspired design
+├─ app.js          # App logic, history management, and API handler
+├─ config.js       # Local API configuration (Git-ignored)
+└─ api/gemini.js   # Vercel serverless function (Secure Proxy)
 ```
 
 ## Demo Flow
@@ -51,37 +52,39 @@ snapcal/
 ## Run Locally
 
 1. Clone this repository.
-2. Open the project folder.
-3. Launch index.html in your browser.
+2. Create a `config.js` file in the root directory:
+   ```javascript
+   window.__ENV__ = {
+     GEMINI_API_KEY: "YOUR_GOOGLE_GEMINI_API_KEY"
+   };
+   ```
+3. Open `index.html` in your browser.
 
-Optional local server:
+*Note: `config.js` is ignored by Git to keep your key safe. You can also use `generate-config.js` as a helper tool to create this file from your terminal.*
 
-```bash
-# Python
-python -m http.server 5500
-```
+## API Setup & Deployment
 
-Then open:
+SnapCal uses a **Dual-Mode** API handler to balance ease of development with production security.
 
-- http://localhost:5500
+### 1. Local Mode
+When running via `file://` or a local server, `app.js` reads your key directly from `config.js`. This allows for fast testing without needing a backend.
 
-## API Setup
+### 2. Production Mode (Vercel)
+When deployed, the app uses a **Secure Proxy** to hide your API key:
+- The frontend calls the serverless function at `/api/gemini`.
+- This function retrieves the key from Vercel's **Environment Variables**.
+- **Result:** Your API key is never exposed to the public or visible in the browser source code.
 
-The app uses Hugging Face Router with Gemma in app.js.
+### Deployment Instructions:
+1. Push your code to GitHub.
+2. Import the project into **Vercel**.
+3. In Vercel **Settings** → **Environment Variables**, add `GEMINI_API_KEY` with your actual key.
+4. Deploy!
 
-If needed, update these constants in app.js:
-
-- HF_TOKEN
-- HF_API
-- HF_MODEL
-
-### Vercel deployment
-
-The app uses a serverless function (`api/gemini.js`) that proxies requests to Gemini. The API key is safely stored on the server and never exposed to the client.
-
-1. In the Vercel project settings, create an Environment Variable named `GEMINI_API_KEY` with your Google Gemini API key.
-2. Deploy normally — no build step required.
-3. The serverless function will use `process.env.GEMINI_API_KEY` to authenticate with Gemini; the client calls `/api/gemini` to send images and receive results.
+## New Features
+- **Client-side Compression:** Images are automatically resized before upload to bypass Vercel's 4.5MB payload limit and speed up analysis.
+- **Meal History:** View, track, and delete meals directly from the dashboard.
+- **Auto-Fallback:** Smart API logic that automatically switches between local and proxy modes.
 
 ## Usecase
 
