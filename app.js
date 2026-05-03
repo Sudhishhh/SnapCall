@@ -33,6 +33,7 @@ const resCarbs      = document.getElementById('resCarbs');
 const resFats       = document.getElementById('resFats');
 const logNowBtn     = document.getElementById('logNowBtn');
 const resetBtn      = document.getElementById('resetBtn');
+const mealHistory   = document.getElementById('mealHistory');
 
 const DASH_CIRCUMFERENCE = 502.65; // for 80r ring
 
@@ -58,17 +59,57 @@ fileInput.addEventListener('change', () => handleFile(fileInput.files[0]));
 async function handleFile(file) {
   if (!file || !file.type.startsWith('image/')) return;
   
-  const reader = new FileReader();
-  reader.onload = async e => {
-    imageB64 = e.target.result;
+  aiLoader.style.display = 'flex';
+  uploadTrigger.style.display = 'none';
+
+  try {
+    imageB64 = await compressImage(file);
     previewImg.src = imageB64;
     previewImg.style.display = 'block';
-    uploadTrigger.style.display = 'none';
     
     // Automatic analysis
     analyzeMeal();
-  };
-  reader.readAsDataURL(file);
+  } catch (err) {
+    console.error('Compression failed:', err);
+    showToast("❌ Image processing failed");
+    resetUpload();
+  }
+}
+
+async function compressImage(file, maxWidth = 1024, quality = 0.7) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = (e) => {
+      const img = new Image();
+      img.src = e.target.result;
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > maxWidth) {
+            height *= maxWidth / width;
+            width = maxWidth;
+          }
+        } else {
+          if (height > maxWidth) {
+            width *= maxWidth / height;
+            height = maxWidth;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+      img.onerror = reject;
+    };
+    reader.onerror = reject;
+  });
 }
 
 async function analyzeMeal() {
@@ -90,14 +131,7 @@ Respond ONLY in JSON:
 }`;
 
   try {
-    const response = await callGeminiVision(prompt, imageB64);
-    let data;
-    try {
-      const jsonMatch = response.match(/\{[\s\S]*\}/);
-      data = JSON.parse(jsonMatch[0]);
-    } catch { 
-      throw new Error("Bad JSON response");
-    }
+    const data = await GeminiService.analyzeMeal(imageB64, prompt);
     lastResult = data;
     showResult(data);
   } catch (err) {
@@ -206,7 +240,40 @@ function renderDashboard() {
   updateMiniRing(ringProtein, totals.p / 150);
   updateMiniRing(ringCarbs, totals.c / 250);
   updateMiniRing(ringFats, totals.f / 70);
+
+  // History List
+  renderHistory(filtered);
 }
+
+function renderHistory(meals) {
+  mealHistory.innerHTML = '';
+  if (meals.length === 0) {
+    mealHistory.innerHTML = '<div class="empty-state">No meals logged for this day</div>';
+    return;
+  }
+
+  meals.forEach(meal => {
+    const el = document.createElement('div');
+    el.className = 'activity-card';
+    el.innerHTML = `
+      <img src="${meal.img || 'https://via.placeholder.com/54'}" class="activity-img" alt="${meal.food}">
+      <div class="activity-info">
+        <div class="activity-name">${meal.food}</div>
+        <div class="activity-meta">${meal.calories} kcal • ${meal.time}</div>
+      </div>
+      <button class="delete-entry-btn" onclick="deleteEntry(${meal.id})">✕</button>
+    `;
+    mealHistory.appendChild(el);
+  });
+}
+
+function deleteEntry(id) {
+  logEntries = logEntries.filter(e => e.id !== id);
+  localStorage.setItem('snapcal_log', JSON.stringify(logEntries));
+  renderDashboard();
+  showToast("🗑️ Entry removed");
+}
+window.deleteEntry = deleteEntry; // Make it global for onclick
 
 
 function updateMiniRing(el, percent) {
@@ -214,34 +281,85 @@ function updateMiniRing(el, percent) {
 }
 
 
-/* ===== VISION API (Gemini) ===== */
-function getGeminiKey() {
-  // Deprecated: key is now handled by /api/gemini serverless proxy.
-  return '';
-}
+/* ===== VISION API (Gemini Service Wrapper) ===== */
+const GeminiService = {
+  getApiKey() {
+    return window.__ENV__?.GEMINI_API_KEY || '';
+  },
 
-async function callGeminiVision(prompt, b64DataUrl) {
-  // Call the serverless proxy which uses process.env.GEMINI_API_KEY on the server.
-  const res = await fetch('/api/gemini', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ prompt, b64: b64DataUrl })
-  });
+  async analyzeMeal(imageB64, prompt) {
+    let responseText = '';
 
-  if (!res.ok) {
-    let details = '';
+    // 1. Try serverless proxy first
     try {
-      details = await res.text();
-    } catch {
-      details = '';
+      const res = await fetch('/api/gemini', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt, b64: imageB64 })
+      });
+
+      if (res.ok) {
+        const json = await res.json();
+        responseText = json.candidates?.[0]?.content?.parts?.[0]?.text || '';
+      } else if (res.status !== 404) {
+        const details = await res.text();
+        console.warn(`Proxy failed (${res.status}): ${details}`);
+      }
+    } catch (err) {
+      console.warn('Proxy attempt failed, falling back to direct call.');
     }
-    throw new Error(`API Error: ${res.status}${details ? ` - ${details}` : ''}`);
+
+    // 2. Fallback to direct call if proxy failed or returned empty
+    if (!responseText) {
+      responseText = await this.callDirect(imageB64, prompt);
+    }
+
+    return this.parseResponse(responseText);
+  },
+
+  async callDirect(imageB64, prompt) {
+    const key = this.getApiKey();
+    if (!key) throw new Error('No API key found. Please check config.js');
+
+    const base64Data = imageB64.split(',')[1];
+    const mimeType = imageB64.split(';')[0].split(':')[1];
+    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${key}`;
+
+    const payload = {
+      contents: [{
+        parts: [
+          { text: prompt },
+          { inline_data: { mime_type: mimeType, data: base64Data } }
+        ]
+      }]
+    };
+
+    const res = await fetch(apiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    if (!res.ok) {
+      const err = await res.text();
+      throw new Error(`Gemini API Error: ${res.status}`);
+    }
+
+    const json = await res.json();
+    return json.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  },
+
+  parseResponse(text) {
+    try {
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) throw new Error("No JSON found in response");
+      return JSON.parse(jsonMatch[0]);
+    } catch (e) {
+      console.error("Failed to parse Gemini response:", text);
+      throw new Error("Failed to parse nutrition data");
+    }
   }
-  const json = await res.json();
-  const text = json.candidates?.[0]?.content?.parts?.[0]?.text || '';
-  if (!text) throw new Error('Empty response from Gemini');
-  return text;
-}
+};
 
 /* ===== UTILS ===== */
 function showToast(msg) {
